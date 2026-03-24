@@ -1,0 +1,569 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MeetingFlowAI</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Alpine plugins -->
+    <script defer src="https://cdn.jsdelivr.net/npm/@alpinejs/collapse@3.x.x/dist/cdn.min.js"></script>
+    <!-- Alpine Core -->
+    <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
+    <!-- Axios -->
+    <script src="https://cdn.jsdelivr.net/npm/axios/dist/axios.min.js"></script>
+    <style>
+        [x-cloak] { display: none !important; }
+        .glass {
+            background: rgba(255, 255, 255, 0.7);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.3);
+        }
+    </style>
+</head>
+<body class="bg-gradient-to-br from-indigo-50 to-blue-100 min-h-screen font-sans text-slate-800 antialiased selection:bg-indigo-200 selection:text-indigo-900">
+    <div class="max-w-5xl mx-auto px-4 py-10" x-data="meetingApp()" x-init="initApp()">
+        
+        <!-- Header -->
+        <div class="text-center md:text-left mb-6 md:mb-0">
+            <h1 class="text-4xl font-extrabold text-transparent bg-clip-text bg-gradient-to-r from-indigo-600 to-blue-500 mb-2 tracking-tight">MeetingFlowAI</h1>
+            <p class="text-slate-500 font-medium">Panel Inteligente de Actas y Resúmenes</p>
+            
+            <!-- Settings Button -->
+            <button @click="openSettings()" class="absolute top-0 right-0 p-2 text-slate-400 hover:text-indigo-600 hover:bg-white rounded-full transition-colors shadow-sm focus:outline-none focus:ring-2 focus:ring-indigo-100" title="Configurar IA">
+                <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path></svg>
+            </button>
+        </header>
+
+        <!-- Main Content -->
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
+            
+            <!-- Dictation Section -->
+            <div class="lg:col-span-1 space-y-6">
+                <div class="glass rounded-2xl p-6 shadow-xl shadow-indigo-100/50 relative overflow-hidden transition-all duration-300">
+                    <h2 class="text-xl font-bold flex items-center gap-2 mb-4 text-indigo-900">
+                        <svg class="w-6 h-6 text-indigo-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z"></path></svg>
+                        Nueva Acta
+                    </h2>
+                    
+                    <div class="space-y-4">
+                        <div>
+                            <label class="block text-sm font-medium text-slate-700 mb-1">Título de la Reunión</label>
+                            <input type="text" x-model="title" class="w-full rounded-xl border-slate-300 border px-4 py-2.5 bg-white/50 focus:bg-white focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-colors shadow-sm" placeholder="Ej: Planificación Sprint" :disabled="isRecording || isSaving">
+                        </div>
+
+                        <!-- Audio Visualization Anim (recording) -->
+                        <div x-show="isRecording && !isPaused" x-cloak class="flex items-center justify-center gap-1 h-8 my-2">
+                            <template x-for="i in 5">
+                                <div class="w-1.5 bg-indigo-500 rounded-full animate-[pulse_0.6s_infinite]" :style="`height: ${Math.random() * 80 + 20}%; animation-delay: ${i * 0.1}s;`"></div>
+                            </template>
+                        </div>
+                        
+                        <!-- Transcribed text preview -->
+                        <div x-show="transcription" x-transition class="p-4 bg-white/70 rounded-xl text-sm border border-slate-200 min-h-[100px] max-h-[200px] overflow-y-auto">
+                            <span x-text="transcription || 'Escuchando...'" class="text-slate-600 italic"></span>
+                        </div>
+
+                        <div class="flex gap-3 pt-2">
+                            <button @click="startRecording()" x-show="!isRecording" class="flex-1 bg-gradient-to-r from-indigo-600 to-indigo-500 hover:from-indigo-700 hover:to-indigo-600 text-white font-semibold py-2.5 px-4 rounded-xl shadow-md shadow-indigo-500/30 transition-all transform hover:-translate-y-0.5" :disabled="!title || isSaving" :class="{'opacity-50 cursor-not-allowed': !title || isSaving}">
+                                <span class="flex items-center justify-center gap-2">
+                                    <svg class="w-5 h-5" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM9.555 7.168A1 1 0 008 8v4a1 1 0 001.555.832l3-2a1 1 0 000-1.664l-3-2z" clip-rule="evenodd"></path></svg>
+                                    Iniciar Dictado
+                                </span>
+                            </button>
+
+                            <!-- Pause Button -->
+                            <button @click="pauseRecording()" x-show="isRecording && !isPaused" class="flex-1 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700 text-white font-semibold py-2.5 px-4 rounded-xl shadow-md shadow-amber-500/30 transition-all transform hover:-translate-y-0.5">
+                                <span class="flex items-center justify-center gap-2">
+                                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 9v6m4-6v6m7-3a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+                                    Pausar
+                                </span>
+                            </button>
+
+                            <!-- Resume Button -->
+                            <button @click="resumeRecording()" x-show="isRecording && isPaused" class="flex-1 bg-gradient-to-r from-emerald-500 to-emerald-600 hover:from-emerald-600 hover:to-emerald-700 text-white font-semibold py-2.5 px-4 rounded-xl shadow-md shadow-emerald-500/30 transition-all transform hover:-translate-y-0.5 animate-pulse border border-emerald-400">
+                                <span class="flex items-center justify-center gap-2">
+                                    <svg class="w-5 h-5" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM9.555 7.168A1 1 0 008 8v4a1 1 0 001.555.832l3-2a1 1 0 000-1.664l-3-2z" clip-rule="evenodd"></path></svg>
+                                    Reanudar
+                                </span>
+                            </button>
+                            
+                            <!-- Stop Button -->
+                            <button @click="stopAndSave()" x-show="isRecording" class="flex-1 bg-gradient-to-r from-rose-500 to-rose-600 hover:from-rose-600 hover:to-rose-700 text-white font-semibold py-2.5 px-4 rounded-xl shadow-md shadow-rose-500/30 transition-all transform hover:-translate-y-0.5" :disabled="isSaving" :class="{'opacity-50 cursor-not-allowed': isSaving, 'animate-pulse': !isPaused}">
+                                <span class="flex items-center justify-center gap-2">
+                                    <svg class="w-5 h-5" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8 7a1 1 0 00-1 1v4a1 1 0 001 1h4a1 1 0 001-1V8a1 1 0 00-1-1H8z" clip-rule="evenodd"></path></svg>
+                                    Detener y Guardar
+                                </span>
+                            </button>
+                        </div>
+
+                        <!-- Feedback Message -->
+                        <div x-show="feedback.message" x-transition x-cloak :class="feedback.isError ? 'bg-red-50 text-red-600 border border-red-100' : 'bg-green-50 text-green-600 border border-green-100'" class="px-4 py-3 rounded-xl text-sm font-medium">
+                            <span x-text="feedback.message"></span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- History Section -->
+            <div class="lg:col-span-2 space-y-6">
+                <!-- Search -->
+                <div class="glass rounded-2xl p-4 flex items-center gap-3 shadow-md shadow-indigo-100/50">
+                    <div class="relative flex-1">
+                        <div class="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
+                            <svg class="h-5 w-5 text-slate-400" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M8 4a4 4 0 100 8 4 4 0 000-8zM2 8a6 6 0 1110.89 3.476l4.817 4.817a1 1 0 01-1.414 1.414l-4.816-4.816A6 6 0 012 8z" clip-rule="evenodd"></path></svg>
+                        </div>
+                        <input type="text" x-model="searchQuery" @input.debounce.500ms="fetchMeetings()" class="block w-full pl-11 pr-4 py-3 rounded-xl border border-slate-200 bg-white/80 focus:bg-white focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-colors" placeholder="Buscar actas por título o contenido...">
+                    </div>
+                </div>
+
+                <!-- Lista de Actas -->
+                <div x-show="isLoading" class="flex justify-center py-12">
+                    <svg class="animate-spin h-8 w-8 text-indigo-600" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
+                </div>
+
+                <div x-show="!isLoading" class="grid sm:grid-cols-2 gap-5 container">
+                    <template x-for="meeting in meetings" :key="meeting.id">
+                        <div class="bg-white rounded-2xl p-5 shadow-sm border border-slate-100 hover:shadow-lg transition-shadow hover:border-indigo-100 flex flex-col h-full group">
+                            <div class="flex justify-between items-start mb-3">
+                                <h3 class="font-bold text-lg text-slate-800 line-clamp-1 group-hover:text-indigo-600 transition-colors max-w-[70%]" title="meeting.title" x-text="meeting.title"></h3>
+                                <span class="bg-indigo-50 text-indigo-700 text-[11px] px-2.5 py-1 rounded-full font-medium whitespace-nowrap" x-text="formatDate(meeting.createdAt)"></span>
+                            </div>
+                            <div class="flex-1 flex items-center mb-3">
+                                <!-- Botón de Generar / Ver Resumen -->
+                                <button @click="openSummary(meeting)" class="w-full relative group overflow-hidden bg-gradient-to-br from-indigo-50 to-blue-50 border border-indigo-100 text-indigo-700 font-medium py-3 px-4 rounded-xl shadow-sm hover:shadow-md transition-all focus:outline-none">
+                                    <div class="flex items-center justify-center gap-2">
+                                        <template x-if="!meeting.summary">
+                                            <span class="flex items-center gap-2">
+                                                <svg class="w-5 h-5 text-indigo-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path></svg>
+                                                Generar Resumen con IA ✨
+                                            </span>
+                                        </template>
+                                        <template x-if="meeting.summary">
+                                            <span class="flex items-center gap-2">
+                                                <svg class="w-5 h-5 text-indigo-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path></svg>
+                                                Ver Resumen
+                                            </span>
+                                        </template>
+                                    </div>
+                                    <div class="absolute inset-0 h-full w-full bg-indigo-50/50 scale-x-0 group-hover:scale-x-100 transition-transform origin-left duration-300 pointer-events-none"></div>
+                                </button>
+                            </div>
+                            
+                            <div x-data="{ expanded: false }" class="mt-4 pt-4 border-t border-slate-100">
+                                <button @click="expanded = !expanded" class="text-xs font-semibold text-indigo-500 hover:text-indigo-700 focus:outline-none flex items-center gap-1">
+                                    <span x-text="expanded ? 'Ocultar transcripción original' : 'Ver transcripción original'"></span>
+                                    <svg class="w-4 h-4 transition-transform duration-300" :class="expanded ? 'rotate-180' : ''" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
+                                </button>
+                                <div x-show="expanded" x-collapse.duration.300ms class="mt-2 bg-slate-50 p-3 rounded-lg text-xs leading-5 text-slate-600 max-h-40 overflow-y-auto">
+                                    <span x-text="meeting.transcription"></span>
+                                </div>
+                            </div>
+                        </div>
+                    </template>
+                    
+                    <div x-show="meetings.length === 0" class="col-span-full py-16 text-center text-slate-500 bg-white/50 rounded-2xl border border-slate-200 border-dashed">
+                        <svg class="mx-auto h-12 w-12 text-slate-400 mb-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path></svg>
+                        <p class="text-lg font-medium text-slate-900 mb-1">No hay actas registradas</p>
+                        <p class="text-sm">Inicia un dictado de voz o realiza otra búsqueda.</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Modal de Resumen AI -->
+        <div x-show="showSummaryModal" x-cloak class="relative z-50">
+            <!-- Background backdrop -->
+            <div x-show="showSummaryModal" x-transition.opacity class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm transition-opacity"></div>
+            
+            <div class="fixed inset-0 z-10 w-screen overflow-y-auto">
+                <div class="flex min-h-full items-end justify-center p-4 text-center sm:items-center sm:p-0">
+                    <div x-show="showSummaryModal" @click.outside="closeSummary()" x-transition.duration.300ms.scale.95 class="relative transform overflow-hidden rounded-2xl bg-white text-left shadow-2xl transition-all sm:my-8 sm:w-full sm:max-w-2xl border border-indigo-100">
+                        <!-- Header -->
+                        <div class="bg-gradient-to-r from-indigo-50 to-white px-6 py-4 border-b border-indigo-100 flex justify-between items-center">
+                            <h3 class="text-xl font-bold text-indigo-900 flex items-center gap-2">
+                                <svg class="w-6 h-6 text-indigo-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path></svg>
+                                Resumen del Acta
+                            </h3>
+                            <button @click="closeSummary()" class="text-slate-400 hover:text-slate-600 bg-slate-100 hover:bg-slate-200 rounded-full p-1.5 transition-colors focus:outline-none">
+                                <svg class="w-5 h-5" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clip-rule="evenodd"></path></svg>
+                            </button>
+                        </div>
+                        
+                        <!-- Content -->
+                        <div class="px-6 py-5">
+                            <p class="text-xs font-semibold uppercase tracking-wider text-slate-500 mb-4" x-text="activeMeetingTitle"></p>
+                            
+                            <!-- Loading State -->
+                            <div x-show="isGeneratingSummary" class="flex flex-col items-center justify-center py-10">
+                                <svg class="animate-spin h-10 w-10 text-indigo-500 mb-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
+                                <p class="text-slate-600 font-medium animate-pulse">La Inteligencia Artificial está analizando y generando el resumen...</p>
+                            </div>
+
+                            <!-- Summary Text -->
+                            <div x-show="!isGeneratingSummary" class="text-sm text-slate-700 leading-relaxed whitespace-pre-wrap max-h-[50vh] overflow-y-auto px-1">
+                                <span x-text="activeSummary"></span>
+                            </div>
+                        </div>
+                        
+                        <!-- Footer -->
+                        <div class="bg-slate-50 px-6 py-4 flex justify-end items-center gap-3 rounded-b-2xl border-t border-slate-100">
+                            <button x-show="!isGeneratingSummary && activeSummary" @click="regenerateSummary()" class="bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700 text-white font-medium py-2 px-6 rounded-xl shadow-md transition-colors focus:outline-none flex items-center gap-2">
+                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path></svg>
+                                Regenerar con IA ✨
+                            </button>
+                            <button @click="closeSummary()" class="bg-white border border-slate-300 text-slate-700 hover:bg-slate-50 font-medium py-2 px-6 rounded-xl shadow-sm transition-colors focus:outline-none focus:ring-2 focus:ring-slate-200">
+                                Cerrar
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            </div>
+
+        <!-- Modal de Ajustes (Settings) -->
+        <div x-show="showSettingsModal" x-cloak class="relative z-50">
+            <div x-show="showSettingsModal" x-transition.opacity class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm transition-opacity"></div>
+            
+            <div class="fixed inset-0 z-10 w-screen overflow-y-auto">
+                <div class="flex min-h-full items-end justify-center p-4 text-center sm:items-center sm:p-0">
+                    <div x-show="showSettingsModal" @click.outside="closeSettings()" x-transition.duration.300ms.scale.95 class="relative transform overflow-hidden rounded-2xl bg-white text-left shadow-2xl transition-all sm:my-8 sm:w-full sm:max-w-lg border border-indigo-100">
+                        <div class="bg-gradient-to-r from-indigo-50 to-white px-6 py-4 border-b border-indigo-100 flex justify-between items-center">
+                            <h3 class="text-xl font-bold text-indigo-900 flex items-center gap-2">
+                                <svg class="w-6 h-6 text-indigo-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path></svg>
+                                Configuración de IA (OpenRouter)
+                            </h3>
+                            <button @click="closeSettings()" class="text-slate-400 hover:text-slate-600 bg-slate-100 hover:bg-slate-200 rounded-full p-1.5 transition-colors focus:outline-none">
+                                <svg class="w-5 h-5" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clip-rule="evenodd"></path></svg>
+                            </button>
+                        </div>
+                        
+                        <div class="px-6 py-5 space-y-4">
+                            <div>
+                                <label class="block text-sm font-medium text-slate-700 mb-1">OpenRouter API Key <span class="text-red-500">*</span></label>
+                                <input type="password" x-model="openRouterApiKey" class="w-full rounded-xl border-slate-300 border px-4 py-2.5 bg-white/50 focus:bg-white focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-colors shadow-sm" placeholder="sk-or-v1-xxxxxxxx">
+                                <p class="text-xs text-slate-500 mt-1">Tu clave se guarda localmente en tu navegador de manera segura.</p>
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-slate-700 mb-1">Modelo de IA Preferido</label>
+                                <input type="text" x-model="openRouterModel" class="w-full rounded-xl border-slate-300 border px-4 py-2.5 bg-white/50 focus:bg-white focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-colors shadow-sm" placeholder="ej: openai/gpt-3.5-turbo">
+                                <p class="text-[11px] text-slate-400 mt-1">Si lo dejas en blanco, se usará 'openai/gpt-5.2' por defecto.</p>
+                            </div>
+                        </div>
+                        
+                        <div class="bg-slate-50 px-6 py-4 flex justify-end gap-3 rounded-b-2xl border-t border-slate-100">
+                            <button @click="closeSettings()" class="bg-white border border-slate-300 text-slate-700 hover:bg-slate-50 font-medium py-2 px-6 rounded-xl shadow-sm transition-colors focus:outline-none focus:ring-2 focus:ring-slate-200">
+                                Cancelar
+                            </button>
+                            <button @click="saveSettings()" class="bg-gradient-to-r from-indigo-600 to-indigo-500 hover:from-indigo-700 hover:to-indigo-600 border border-transparent text-white font-medium py-2 px-6 rounded-xl shadow-md transition-all focus:outline-none flex items-center gap-2">
+                                Guardar Cambios
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div> <!-- Contenedor Alpine x-data end -->
+
+    <!-- Application Script -->
+    <script>
+        document.addEventListener('alpine:init', () => {
+            Alpine.data('meetingApp', () => ({
+                title: '',
+                finalTranscription: '',
+                transcription: '',
+                isRecording: false,
+                isSaving: false,
+                isPaused: false,
+                manualStop: false,
+                searchQuery: '',
+                meetings: [],
+                isLoading: false,
+                feedback: { message: '', isError: false },
+                
+                showSummaryModal: false,
+                activeMeeting: null,
+                activeMeetingTitle: '',
+                activeSummary: '',
+                isGeneratingSummary: false,
+                
+                showSettingsModal: false,
+                openRouterApiKey: '',
+                openRouterModel: 'openai/gpt-5.2',
+
+                recognition: null,
+                
+                initApp() {
+                    this.openRouterApiKey = localStorage.getItem('meeting_or_apikey') || '';
+                    this.openRouterModel = localStorage.getItem('meeting_or_model') || 'openai/gpt-5.2';
+                    this.setupSpeechRecognition();
+                    this.fetchMeetings();
+                },
+
+                setupSpeechRecognition() {
+                    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+                    if (SpeechRecognition) {
+                        this.recognition = new SpeechRecognition();
+                        this.recognition.continuous = true;
+                        this.recognition.interimResults = true;
+                        this.recognition.lang = 'es-ES';
+                        
+                        this.recognition.onresult = (event) => {
+                            let interimTranscript = '';
+                            let finalTranscript = '';
+
+                            for (let i = event.resultIndex; i < event.results.length; ++i) {
+                                if (event.results[i].isFinal) {
+                                    finalTranscript += event.results[i][0].transcript;
+                                } else {
+                                    interimTranscript += event.results[i][0].transcript;
+                                }
+                            }
+                            
+                            if (finalTranscript) {
+                                // Agrega espacio para separar oraciones si venimos de una pausa/reinicio
+                                if (this.finalTranscription && !this.finalTranscription.endsWith(' ')) {
+                                    this.finalTranscription += ' ';
+                                }
+                                this.finalTranscription += finalTranscript;
+                            }
+                            
+                            this.transcription = this.finalTranscription + (interimTranscript ? ' ' + interimTranscript : '');
+                        };
+
+                        this.recognition.onerror = (event) => {
+                            // Ignoramos el error 'no-speech' para que simplemente se reinicie
+                            if (event.error !== 'no-speech') {
+                                console.error('Error de micrófono:', event.error);
+                                this.showFeedback('Error intentando acceder al micrófono (' + event.error + ').', true);
+                                this.isRecording = false;
+                            }
+                        };
+
+                        this.recognition.onend = () => {
+                            if (this.manualStop) {
+                                this.isRecording = false;
+                                this.isPaused = false;
+                                this.manualStop = false;
+                            } else if (this.isPaused) {
+                                // Muestra estado pausado, no intenta resetear el mic
+                            } else if (this.isRecording) {
+                                // Si el navegador lo detiene por silencio, lo volvemos a iniciar
+                                try {
+                                    this.recognition.start();
+                                    console.log('Reiniciando micrófono automáticamente...');
+                                } catch (e) {
+                                    this.isRecording = false;
+                                }
+                            } else {
+                                this.isRecording = false;
+                            }
+                        };
+                    } else {
+                        console.warn('Web Speech API no soportada por el navegador.');
+                    }
+                },
+
+                startRecording() {
+                    if (!this.title.trim()) {
+                        this.showFeedback('Por favor, ingresa el título antes de dictar.', true);
+                        return;
+                    }
+                    if (!this.recognition) {
+                        this.showFeedback('Tu navegador no soporta Web Speech API.', true);
+                        return;
+                    }
+                    
+                    this.finalTranscription = '';
+                    this.transcription = '';
+                    this.feedback = { message: '', isError: false };
+                    this.manualStop = false;
+                    this.isPaused = false;
+                    
+                    try {
+                        this.recognition.start();
+                        this.isRecording = true;
+                    } catch (e) {
+                        console.error(e);
+                        this.showFeedback('Hubo un problema iniciando el dictado.', true);
+                    }
+                },
+
+                pauseRecording() {
+                    if (this.recognition && this.isRecording && !this.isPaused) {
+                        this.isPaused = true;
+                        this.recognition.stop();
+                        this.showFeedback('Grabación en pausa...', false);
+                    }
+                },
+
+                resumeRecording() {
+                    if (this.recognition && this.isPaused) {
+                        this.isPaused = false;
+                        this.feedback.message = '';
+                        try {
+                            this.recognition.start();
+                        } catch (e) {
+                            console.error(e);
+                            this.showFeedback('Error al reanudar la grabación.', true);
+                            this.isPaused = true;
+                        }
+                    }
+                },
+
+                async stopAndSave() {
+                    this.manualStop = true;
+                    if (this.recognition && this.isRecording) {
+                        this.recognition.stop();
+                    }
+                    this.isRecording = false;
+                    this.isPaused = false;
+                    this.isSaving = true;
+                    
+                    if (!this.transcription.trim()) {
+                        this.showFeedback('No se registró ninguna transcripción válida.', true);
+                        this.isSaving = false;
+                        return;
+                    }
+
+                    try {
+                        this.showFeedback('Enviando a la IA para resumen...', false);
+                        
+                        const response = await axios.post('/api/meetings', {
+                            title: this.title,
+                            transcription: this.transcription
+                        });
+                        
+                        this.showFeedback('Acta guardada correctamente.', false);
+                        this.title = '';
+                        this.transcription = '';
+                        
+                        // Recargar historial
+                        this.fetchMeetings();
+                        
+                        setTimeout(() => this.feedback.message = '', 4000);
+                    } catch(error) {
+                        console.error(error);
+                        const errorMsg = error.response?.data?.error || 'Error de conexión con el backend.';
+                        this.showFeedback('Error al guardar: ' + errorMsg, true);
+                    } finally {
+                        this.isSaving = false;
+                    }
+                },
+
+                async fetchMeetings() {
+                    this.isLoading = true;
+                    try {
+                        const response = await axios.get('/api/meetings', {
+                            params: { q: this.searchQuery }
+                        });
+                        this.meetings = response.data.data;
+                    } catch(error) {
+                        console.error("Error al obtener datos:", error);
+                        this.showFeedback("Error al intentar obtener las actas.", true);
+                    } finally {
+                        this.isLoading = false;
+                    }
+                },
+
+                async openSummary(meeting) {
+                    this.activeMeeting = meeting;
+                    this.activeMeetingTitle = meeting.title;
+                    this.showSummaryModal = true;
+                    this.activeSummary = '';
+
+                    if (meeting.summary) {
+                        // El resumen ya fue generado previamente
+                        this.activeSummary = meeting.summary;
+                        this.isGeneratingSummary = false;
+                    } else {
+                        // Debemos generar el resumen llamando a nuestra API de IA
+                        this.executeSummaryGeneration(meeting, false);
+                    }
+                },
+
+                async regenerateSummary() {
+                    const confirmacion = confirm("¿Estás seguro que deseas regenerar este resumen interactuando con la IA? Se consultará la API y se sobreescribirá tu historia anterior de manera permanente.");
+                    if (!confirmacion || !this.activeMeeting) return;
+                    
+                    this.activeSummary = '';
+                    this.executeSummaryGeneration(this.activeMeeting, true);
+                },
+
+                async executeSummaryGeneration(meeting, isForceRegenerate) {
+                    this.isGeneratingSummary = true;
+                    try {
+                        if (!this.openRouterApiKey) {
+                            throw new Error("API Key de OpenRouter no configurada. Haz clic en el ícono de engranaje arriba a la derecha.");
+                        }
+
+                        const response = await axios.post(`/api/meetings/${meeting.id}/summary`, {
+                            apiKey: this.openRouterApiKey,
+                            model: this.openRouterModel,
+                            forceRegenerate: isForceRegenerate
+                        });
+                        
+                        const updatedMeeting = response.data.data;
+                        meeting.summary = updatedMeeting.summary; // actualiza la variable en la tarjeta localmente
+                        
+                        this.activeSummary = updatedMeeting.summary;
+                    } catch (error) {
+                        console.error('Error procesando el resumen con la IA', error);
+                        let errorDetails = '';
+                        if (error.response && error.response.data && error.response.data.error) {
+                            errorDetails = "\n\nDetalle: " + error.response.data.error;
+                        } else if (error.message) {
+                            errorDetails = "\n\nDetalle: " + error.message;
+                        }
+                        this.activeSummary = 'Ocurrió un error al intentar conectarse al servidor y generar el resumen.' + errorDetails;
+                    } finally {
+                        this.isGeneratingSummary = false;
+                    }
+                },
+
+                closeSummary() {
+                    this.showSummaryModal = false;
+                    this.activeSummary = '';
+                    this.activeMeetingTitle = '';
+                    this.activeMeeting = null;
+                },
+
+                openSettings() {
+                    this.showSettingsModal = true;
+                },
+
+                closeSettings() {
+                    // Revertimos cambios si se canceló la edición
+                    this.openRouterApiKey = localStorage.getItem('meeting_or_apikey') || '';
+                    this.openRouterModel = localStorage.getItem('meeting_or_model') || 'openai/gpt-5.2';
+                    this.showSettingsModal = false;
+                },
+
+                saveSettings() {
+                    const modelToSave = this.openRouterModel.trim() || 'openai/gpt-5.2';
+                    localStorage.setItem('meeting_or_apikey', this.openRouterApiKey.trim());
+                    localStorage.setItem('meeting_or_model', modelToSave);
+                    this.openRouterModel = modelToSave;
+                    this.showSettingsModal = false;
+                    this.showFeedback('Ajustes guardados exitosamente en tu navegador', false);
+                },
+
+                showFeedback(msg, isError = false) {
+                    this.feedback = { message: msg, isError: isError };
+                },
+                
+                formatDate(dateStr) {
+                    if (!dateStr) return '';
+                    const date = new Date(dateStr);
+                    return date.toLocaleDateString('es-ES', { 
+                        day: '2-digit', 
+                        month: 'short', 
+                        year: 'numeric',
+                        hour: '2-digit',
+                        minute: '2-digit'
+                    });
+                }
+            }));
+        });
+    </script>
+</body>
+</html>

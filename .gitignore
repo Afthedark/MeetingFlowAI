@@ -1,0 +1,43 @@
+# Dependencias de Node
+node_modules/
+
+# Archivos de Entorno y Variables Seguras
+.env
+.env.local
+.env.development
+.env.test
+.env.production
+
+# Logs
+logs/*
+!logs/.gitkeep
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# Modelos de Inteligencia Artificial (Vosk y similares pesados)
+models/*
+!models/.gitkeep
+*.model
+*.pb
+*.pth
+*.pt
+
+# Archivos Subidos por el Usuario (Audio Multer)
+uploads/*
+!uploads/.gitkeep
+*.wav
+*.mp3
+*.ogg
+
+# Configuración del Sistema Operativo y Editores (IDE)
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
